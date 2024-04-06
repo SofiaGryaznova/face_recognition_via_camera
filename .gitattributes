@@ -1,2 +1,96 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+import cv2 #pip install cv2
+import dlib #pip install dlib
+import numpy as np #pip install numpy
+
+
+class FaceRecognitionApp(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.face_recognition_model = dlib.face_recognition_model_v1("dlib_face_recognition_resnet_model_v1.dat")
+        self.detector = dlib.get_frontal_face_detector()
+        self.predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+        self.face_encoding = []
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Face Recognition App')
+        self.setGeometry(100,100,400,200)
+
+        layout = QVBoxLayout()
+        
+        self.add_face_button = QPushButton('Добавить лицо')
+        self.add_face_button.clicked.connect(self.add_face)
+        layout.addWidget(self.add_face_button)
+
+        self.check_face_button = QPushButton('Проверить лицо')
+        self.check_face_button.clicked.connect(self.check_face)
+        layout.addWidget(self.check_face_button)
+
+        self.result_label = QLabel('')
+        layout.addWidget(self.result_label)
+
+        self.setLayout(layout)
+
+    def add_face(self):
+        cap = cv2.VideoCapture(0)
+        ret, frame = cap.read()
+
+        if not ret:
+            self.result_label.setText("Не удалось захватить изображение с камеры")
+            return
+
+        rgb_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+
+        detections = self.detector(rgb_frame,1)
+        if(len(detections)==0):
+            self.result_label.setText("На изображении не найдено лицо")
+            return
+
+        face_full_obj = self.predictor(rgb_frame,detections[0])
+        face_encoding = np.array(self.face_recognition_model.compute_face_descriptor(rgb_frame,face_full_obj))
+
+        self.face_encoding.append(face_encoding)
+        self.result_label.setText("Лицо успешно добавлено")
+        cap.release()
+
+    def check_face(self):
+         if len(self.face_encoding)==0:
+             self.result_label.setText('Сначала добавьте лицо')
+             return
+         cap = cv2.VideoCapture(0)
+         ret, frame = cap.read()
+         if(not ret):
+             self.result_label.setText("Не удалось захватить изображение с камеры")
+
+         rgb_frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+
+         detections = self.detector(rgb_frame,1)
+
+         if(len(detections)==0):
+             self.result_label.setText("На изображении не найдено лицо")
+             return
+
+         face_full_obj = self.predictor(rgb_frame,detections[0])
+         face_encoding = np.array(self.face_recognition_model.compute_face_descriptor(rgb_frame,face_full_obj))
+
+
+         match_found = False
+         for know_face_encoding in self.face_encoding:
+             eu_distance = np.linalg.norm(face_encoding-know_face_encoding)
+             if(eu_distance<0.6):
+                 match_found = True
+                 break
+         cap.release()
+
+         if match_found:
+             self.result_label.setText("Лица, скорее всего, принадлежат одному и тому же человеку")
+         else:
+             self.result_label.setText("Лица, скорее всего, принадлежат разным людям")
+
+
+app = QApplication(sys.argv)
+face_recognition_app = FaceRecognitionApp()
+face_recognition_app.show()
+sys.exit(app.exec_())
